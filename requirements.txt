@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+sentence-transformers
+chromadb
+rapidfuzz
+openai
+python-dotenv
+streamlit
