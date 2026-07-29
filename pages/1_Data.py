@@ -64,7 +64,11 @@ for row in rows:
                 if company["website"]:
                     st.caption(company["website"])
 
-                st.write(company["summary"] or "_no summary_")
+                keywords = company.get("keywords") or []
+                if keywords:
+                    st.markdown(" ".join(f"`{kw}`" for kw in keywords))
+                else:
+                    st.caption("_no keywords_")
 
                 if primary:
                     st.markdown(f"🏷️ **Primary:** `{primary['name']}`")

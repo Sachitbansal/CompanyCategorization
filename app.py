@@ -34,7 +34,8 @@ def render_result(result: dict) -> None:
     st.subheader(result["name"])
     if result.get("website"):
         st.caption(result["website"])
-    st.write(result["summary"])
+    if result.get("keywords"):
+        st.markdown(" ".join(f"`{kw}`" for kw in result["keywords"]))
 
     st.markdown(f"**Primary tag:** `{result['primary_tag']}`")
     if result["secondary_tags"]:
@@ -75,7 +76,7 @@ def drive_pipeline(name_or_url: str, extra_context: str | None = None, scraped=N
                                     else ""
                                 )
                             )
-                            st.caption(m["summary"])
+                            st.caption(", ".join(m["keywords"]))
                 else:
                     status.write("_No company cleared the similarity threshold — tagging call sent with no few-shot examples._")
 

@@ -1,18 +1,29 @@
 """
-embed.py — company summary embeddings for optimiseGEO.
+embed.py — company keyword embeddings for optimiseGEO.
 
-Only company summaries get embedded (sentence-transformers all-MiniLM-L6-v2
--> Chroma), never the tag list itself — the category pool stays small
-enough to pass as plain text in the tag-assignment prompt (see
-prompts/tagging_prompt.py), per CLAUDE.md. Embeddings exist purely to
-retrieve top-k similar companies as few-shot examples for that prompt.
+Only the `keywords` list gets embedded (sentence-transformers
+all-MiniLM-L6-v2 -> Chroma), never the prose summary and never the tag
+list itself — the category pool stays small enough to pass as plain text
+in the tag-assignment prompt (see prompts/tagging_prompt.py), per
+CLAUDE.md. Embeddings exist purely to retrieve top-k similar companies as
+few-shot examples for that prompt.
+
+Prose summaries were embedded here originally, but were dropped per the
+tag-canonicalization skill (frontmatter name similarity-retrieval) after a
+confirmed bug: full-sentence summaries matched on shared boilerplate
+phrasing ("Indian", "businesses of all sizes") rather than actual
+business similarity — Razorpay outranked Flipkart for a Flipkart query,
+and Amazon/Flipkart (same industry) scored lower than Amazon/Razorpay
+(different industries). Keywords are industry/product terms only, with
+the boilerplate already stripped out at generation time
+(prompts/summary_prompt.py), so they embed on signal instead of noise.
 """
 
 import chromadb
 from sentence_transformers import SentenceTransformer
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-COLLECTION_NAME = "company_summaries"
+COLLECTION_NAME = "company_keywords"
 CHROMA_PATH = "chroma_db"
 
 
@@ -45,23 +56,31 @@ def delete_embedding(collection: chromadb.Collection, embedding_id: str) -> None
         collection.delete(ids=[embedding_id])
 
 
+def _join_keywords(keywords: list[str]) -> str:
+    """Flatten a keyword list into the single string that actually gets
+    embedded. ", "-joined rather than concatenated so MiniLM still tokenizes
+    each keyword as a separate word/phrase rather than running them together."""
+    return ", ".join(keywords)
+
+
 def embed_and_store(
     collection: chromadb.Collection,
     embedder: SentenceTransformer,
     company_id: int,
-    summary: str,
+    keywords: list[str],
 ) -> str:
     """
-    Embed `summary` and store it in the collection, keyed by an id derived
+    Embed `keywords` and store it in the collection, keyed by an id derived
     from `company_id`. Returns that embedding_id so the caller can store
     it on the companies row (companies.embedding_id) for later lookup.
     """
     embedding_id = f"company-{company_id}"
-    vector = embedder.encode(summary).tolist()
+    text = _join_keywords(keywords)
+    vector = embedder.encode(text).tolist()
     collection.upsert(
         ids=[embedding_id],
         embeddings=[vector],
-        documents=[summary],
+        documents=[text],
         metadatas=[{"company_id": company_id}],
     )
     return embedding_id
@@ -70,13 +89,13 @@ def embed_and_store(
 def top_k_similar(
     collection: chromadb.Collection,
     embedder: SentenceTransformer,
-    summary: str,
+    keywords: list[str],
     k: int = 5,
-    threshold: float = 0.35,
+    threshold: float = 0.55,
 ) -> list[dict]:
     """
-    Retrieve up to k companies whose stored summaries are most similar to
-    `summary`. Returns a list of dicts: {company_id, summary, similarity}.
+    Retrieve up to k companies whose stored keyword lists are most similar
+    to `keywords`. Returns a list of dicts: {company_id, keywords, similarity}.
 
     Collection distance space is cosine (0 = identical, 2 = opposite), so
     similarity = 1 - distance. Only matches with similarity >= threshold
@@ -84,17 +103,21 @@ def top_k_similar(
     CLAUDE.md the caller should send the tag-assignment prompt with no
     few-shot examples rather than forcing in weak/irrelevant ones.
 
-    threshold=0.35, not the originally-planned 0.60: measured on real
-    company summaries, all-MiniLM-L6-v2 cosine similarity for genuinely
-    similar businesses (e.g. Amazon vs eBay, both marketplaces) comes out
-    around 0.46, and unrelated companies are usually under 0.20. A 0.60
-    cutoff would reject every real match seen so far. CLAUDE.md flags
-    this threshold as "tunable" for exactly this reason.
+    threshold=0.55, revised down from 0.65 (which was itself revised from
+    an initial 0.35 tuned for the old prose-summary embeddings). The
+    Stripe/Razorpay/Amazon/Flipkart/eBay set clustered same-industry pairs
+    at 0.70-0.86 and cross-industry at 0.53-0.60, which suggested 0.65 —
+    but HP vs Dell (both computer hardware, genuinely similar) scored only
+    0.584, below that cutoff. 0.55 lets HP/Dell through while still
+    sitting above most cross-industry pairs seen so far; keep re-measuring
+    as more companies are added, since each new pair shifts what "genuinely
+    similar" scores like for this embedding model.
     """
     if collection.count() == 0:
         return []
 
-    vector = embedder.encode(summary).tolist()
+    text = _join_keywords(keywords)
+    vector = embedder.encode(text).tolist()
     results = collection.query(
         query_embeddings=[vector],
         n_results=min(k, collection.count()),
@@ -112,7 +135,7 @@ def top_k_similar(
             matches.append(
                 {
                     "company_id": metadata["company_id"],
-                    "summary": document,
+                    "keywords": document.split(", ") if document else [],
                     "similarity": similarity,
                 }
             )

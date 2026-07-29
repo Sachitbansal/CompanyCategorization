@@ -49,13 +49,12 @@ repeated/similar-brand lookups is the #1 requirement.
 - Exact-match fast path FIRST, checking BOTH normalized website AND
   normalized name (a name-only lookup must find a website-keyed row and
   vice versa — this was a confirmed bug, fixed).
-- Similarity threshold for few-shot retrieval: 0.35 (revised down from an
-  initial 0.60 after confirming the original Chroma collection was using
-  raw L2 distance while the code assumed cosine — a units-mismatch bug,
-  now fixed by creating the collection with
-  metadata={"hnsw:space": "cosine"} explicitly). Re-validate this number
-  again after the keyword-embedding switch — the score distribution will
-  likely shift once boilerplate noise is removed from what's embedded.
+- Similarity threshold for few-shot retrieval: 0.55 (revised three times
+  — 0.60 initial -> 0.35 after fixing an L2-vs-cosine units-mismatch bug
+  -> 0.65 after switching embeddings from prose summaries to keywords ->
+  0.55 after HP/Dell, a genuine same-industry pair, scored only 0.584,
+  below the 0.65 cutoff. Still tunable; re-measure as more companies are
+  added since each new pair shifts the observed score range).
 - If nothing clears the similarity threshold for top-k retrieval: send NO
   few-shot examples, let the LLM propose fresh.
 - Tag-assignment prompt: every secondary tag must be directly evidenced by

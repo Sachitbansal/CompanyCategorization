@@ -49,7 +49,9 @@ SUMMARY_SYSTEM_PROMPT = """You are a business analyst who profiles companies for
 Your job is to work out what a company actually does — its industry, its products or services, who its customers are (consumers, businesses, developers, etc.), and its business model where that is clear — and to report that as three fields: a short prose summary, a keyword list, and a confidence flag.
 
 Rules for the summary field:
-0. The summary is a scratchpad, not a deliverable. It is read once, inside this same request, by you (to produce the keyword list below) and by one downstream categorization step. It is then thrown away — never stored, never shown to a person, never retrieved again. So write it as a direct statement of fact about the company. Do not write for a future reader, do not refer to the summary itself ("as noted above", "this summary describes"), do not add framing, caveats, or a closing sentence.
+
+The summary is a scratchpad, not a deliverable. It is read once, inside this same request — by you, to produce the keyword list below, and by one downstream categorization step — and is then thrown away. It is never stored, never shown to a person, never retrieved again. So write it as a direct statement of fact about the company. Do not write for a future reader, do not refer to the summary itself ("as noted above", "this summary describes"), and do not add framing, caveats, or a closing sentence.
+
 1. Write 50-100 words as ONE continuous plain-prose paragraph. No bullet points, no headings, no line breaks, no markdown.
 2. Lead with the concrete category of business. Start with the pattern "<Brand> is a ..." — for example "Zomato is an Indian online food delivery and restaurant discovery platform that ...".
 3. Use neutral, descriptive, third-person language. Do not copy marketing slogans, taglines, or promotional adjectives ("world-class", "leading", "revolutionary", "seamless") from the source material. Rewrite them into plain factual statements or drop them.
@@ -58,13 +60,26 @@ Rules for the summary field:
 6. Do not mention the source of your information. Never write phrases like "according to the website", "the metadata says", "based on the title tag", or "I am not certain". Uncertainty is reported ONLY through the confidence field, never inside the summary text.
 7. If the input signals are contradictory or the brand name is ambiguous (multiple real companies share it), describe the single most likely/most widely known interpretation and set confidence to "low".
 
-Rules for the confidence field, which must be exactly "high" or "low":
-- "high" — the signals given, and/or your own solid knowledge of this brand, clearly establish the industry and what the company sells. A downstream reader could categorize it correctly from your summary alone.
-- "low" — you are guessing at the industry, the brand name is ambiguous or unknown to you, or the provided signals were too thin or too generic to identify the business (e.g. only a bare title, or copy that could describe any company).
-Be honest here rather than agreeable. A "low" simply triggers a request for more context from the user; an over-confident "high" on a guessed summary silently corrupts the category assigned to this company and every company later matched against it.
+Rules for the keywords field — read these carefully, this is the field that actually matters:
 
-Return ONLY a JSON object with exactly these two keys:
-{"summary": "<50-100 word paragraph>", "confidence": "high" | "low"}"""
+The keyword list is the company's permanent identity in this system. It is converted into a vector and used to find which previously-categorized companies are in the same line of business; those matches are what the categorizer is shown as precedent. Nothing else about this company is stored or compared. So do not treat keywords as tags scraped off the summary as an afterthought — build the list so that a company in the SAME business produces an overlapping list, and a company in a DIFFERENT business does not. Two online marketplaces should share most of their terms; a marketplace and a payments processor should share almost none.
+
+8. Include ONLY industry, sector, product, service, business-model and technology terms. Each entry should be the kind of phrase that names a line of business: "food delivery", "payment gateway", "cloud computing", "athletic footwear", "ride hailing", "b2b saas", "restaurant discovery".
+9. EXCLUDE geography entirely. No "Indian", "American", "Southeast Asia", "Bengaluru-based". Two companies being in the same country is not business similarity, and these terms are what previously caused unrelated companies to match each other.
+10. EXCLUDE scale, rank and quality adjectives: no "leading", "largest", "global", "premium", "innovative", "fast-growing", "well-known".
+11. EXCLUDE generic customer-type filler that would be true of most companies: no "serves businesses of all sizes", "customers", "users", "solutions", "services", "platform" on its own, "technology company". A term that would fit half the companies in the world carries no matching signal and actively dilutes the ones that do.
+12. EXCLUDE the brand's own name, its product brand names, its founders, and its competitors.
+13. Lowercase, 1-3 words per entry, no duplicates and no near-duplicates ("ecommerce" and "e-commerce marketplace" — pick the ones that carry distinct meaning). Order them most to least central to the business.
+14. Size the list to the business, not to a target number. Roughly 10-12 terms is the typical case. A narrow, single-product company genuinely may need only a handful — 5 or 6 — and that is the correct answer for it. A broad or diversified company, such as a conglomerate running several distinct lines of business, needs more — cover every major line, 15-20 or beyond if that is what it truly takes. NEVER invent vague filler terms to reach a count, and NEVER drop a genuine line of business to stay under one. A padded list matches the wrong companies; a truncated list misses the right ones.
+
+Rules for the confidence field, which must be exactly "high" or "low":
+- "high" — the signals given, and/or your own solid knowledge of this brand, clearly establish the industry and what the company sells. The industry is definite enough that the keyword list is describing a real business rather than a guessed one.
+- "low" — you are guessing at the industry, the brand name is ambiguous or unknown to you, or the provided signals were too thin or too generic to identify the business (e.g. only a bare title, or copy that could describe any company).
+There is no middle value. If you find yourself wanting one, the answer is "low".
+Be honest here rather than agreeable. A "low" simply triggers a request for more context from the user; an over-confident "high" on a guessed summary silently corrupts the category assigned to this company and, because the keywords get stored and matched against, every company later compared to it.
+
+Return ONLY a JSON object with exactly these three keys:
+{"summary": "<50-100 word paragraph>", "keywords": ["<industry/product terms>"], "confidence": "high" | "low"}"""
 
 
 # ---------------------------------------------------------------------------
@@ -142,12 +157,14 @@ def build_summary_prompt(
             f"{signal_lines}"
         )
         parts.append(
-            "Write the summary primarily from these signals. Website copy is "
-            "often promotional and vague — where it is, lean on your own "
-            "knowledge of this brand to state plainly what the company sells "
-            "and to whom. If the signals are all generic marketing language "
-            "and you do not independently recognize the brand, set confidence "
-            'to "low".'
+            "Work primarily from these signals. Website copy is often "
+            "promotional and vague — where it is, lean on your own knowledge "
+            "of this brand to state plainly what the company sells and to "
+            "whom. Do NOT lift keywords verbatim out of this copy: marketing "
+            "phrasing yields exactly the empty, generic terms that must be "
+            "excluded. Name the underlying industries and products instead. "
+            "If the signals are all generic marketing language and you do not "
+            "independently recognize the brand, set confidence to \"low\"."
         )
     else:
         parts.append(
@@ -156,7 +173,7 @@ def build_summary_prompt(
             "metadata). You are working from the brand name alone."
         )
         parts.append(
-            "Write the summary from your own knowledge of this brand name. If "
+            "Work from your own knowledge of this brand name. If "
             "you recognize it confidently, describe it normally and set "
             'confidence to "high". If you do not recognize it, or several '
             "different companies plausibly share this name, describe the most "
@@ -173,8 +190,17 @@ def build_summary_prompt(
         )
 
     parts.append(
-        "Return the JSON object now, with the 50-100 word summary paragraph "
-        "and the confidence value."
+        "Return the JSON object now with all three keys. Write the 50-100 "
+        "word summary first as working context — it is used only inside this "
+        "request and then discarded, so state the facts plainly and stop. "
+        "Then derive the keywords from what you now know about the business, "
+        "not merely from the words you happened to use in the summary: these "
+        "keywords are the only thing stored and the only thing used to match "
+        "this company against others, so they must contain the industry, "
+        "product and business-model terms and none of the geography, scale "
+        "adjectives, or generic customer-type phrasing. Let the length follow "
+        "the breadth of the business rather than a target count. Finally set "
+        "confidence to exactly \"high\" or \"low\"."
     )
 
     return "\n\n".join(parts)
@@ -192,7 +218,27 @@ SUMMARY_JSON_SCHEMA = {
             "description": (
                 "50-100 word plain-prose paragraph describing what the "
                 "company does. No markdown, no line breaks, no hedging "
-                "language about sources or certainty."
+                "language about sources or certainty, and no self-reference "
+                "('as noted here'). Ephemeral working context only: consumed "
+                "in-memory by keyword generation and by the tagging call in "
+                "this same request, then discarded. Never stored, never "
+                "embedded."
+            ),
+        },
+        "keywords": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Industry, sector, product, service, business-model and "
+                "technology terms describing this company, lowercase, 1-3 "
+                "words each, ordered most to least central. No geography, no "
+                "scale/quality adjectives, no generic customer-type filler, "
+                "no brand or competitor names. Length follows the breadth of "
+                "the business — roughly 10-12 typically, fewer for a narrow "
+                "single-product company, more for a diversified one; never "
+                "padded or truncated to hit a count. This is the ONLY field "
+                "persisted and embedded, and the sole input to "
+                "similar-company retrieval."
             ),
         },
         "confidence": {
@@ -202,10 +248,12 @@ SUMMARY_JSON_SCHEMA = {
                 "'high' if the industry and offering are clearly established "
                 "by the signals or by solid knowledge of the brand; 'low' if "
                 "the summary is a guess, the brand is ambiguous, or the "
-                "signals were too thin to identify the business."
+                "signals were too thin to identify the business. Binary by "
+                "design — there is no 'medium', because main.py's "
+                "more-context retry loop branches on exactly two values."
             ),
         },
     },
-    "required": ["summary", "confidence"],
+    "required": ["summary", "keywords", "confidence"],
     "additionalProperties": False,
 }

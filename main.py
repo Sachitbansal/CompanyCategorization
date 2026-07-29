@@ -11,19 +11,20 @@ order locked by CLAUDE.md:
     2. Scrape the website (scraper.py); on failure, summarize from the
        brand name alone.
     3. DeepSeek summary call, temperature=0, structured JSON
-       (prompts/summary_prompt.py). Whenever the summary comes back
-       low-confidence — whether that's because the scrape failed and the
-       model doesn't know the brand by name alone, or the scrape
-       succeeded but the page content still wasn't enough to pin down
-       what the company does — the generator PAUSES (yields
+       (prompts/summary_prompt.py), returning THREE fields: `summary`
+       (ephemeral — used only in-memory for this one request, as context
+       for keyword generation and the tagging call right after, then
+       discarded; never stored, never embedded), `keywords` (the only
+       thing that IS persisted and embedded), and `confidence`. Whenever
+       confidence comes back low — whether that's because the scrape
+       failed and the model doesn't know the brand by name alone, or the
+       scrape succeeded but the page content still wasn't enough to pin
+       down what the company does — the generator PAUSES (yields
        "awaiting_context" and stops) so the caller can ask the user to
        describe the brand themselves. Calling run_pipeline again with
        that description as `extra_context` resumes and retries the
-       summary call ONCE (not indefinitely) with it folded in. DeepSeek
-       then rewrites the raw user description into the same clean,
-       consistent prose used for every other summary, since that's what
-       gets embedded.
-    4. Embed the summary and retrieve top-k similar companies as few-shot
+       summary call ONCE (not indefinitely) with it folded in.
+    4. Embed `keywords` and retrieve top-k similar companies as few-shot
        context (embed.py) — empty list if nothing clears the threshold.
     5. DeepSeek tag-assignment call (prompts/tagging_prompt.py).
     6. Run every proposed tag through the string-level dedup guardrail
@@ -168,7 +169,7 @@ def _company_result(conn, company: dict, cache_hit: bool) -> dict:
         "company_id": company["id"],
         "name": company["name"],
         "website": company["website"],
-        "summary": company["summary"],
+        "keywords": company["keywords"],
         "primary_tag": primary["name"] if primary else None,
         "secondary_tags": [s["name"] for s in secondaries],
         "cache_hit": cache_hit,
@@ -231,12 +232,17 @@ def run_pipeline(name_or_url: str, extra_context: str | None = None, scraped=Non
         }
         return
 
+    # `summary` stays in-memory for this request only (context for the
+    # tagging call's "COMPANY TO CATEGORIZE" block right below) — it is
+    # never stored or embedded. `keywords` is what gets persisted and
+    # embedded; it's the only thing that exists for past companies too.
     summary = summary_data["summary"]
+    keywords = summary_data["keywords"]
 
     yield {"step": "retrieve_similar", "status": "running"}
     embedder = embed.get_embedder()
     collection = embed.get_chroma_collection()
-    similar = embed.top_k_similar(collection, embedder, summary)
+    similar = embed.top_k_similar(collection, embedder, keywords)
 
     few_shot_examples = []
     for match in similar:
@@ -248,7 +254,7 @@ def run_pipeline(name_or_url: str, extra_context: str | None = None, scraped=Non
         few_shot_examples.append(
             {
                 "name": company["name"],
-                "summary": company["summary"],
+                "keywords": company["keywords"],
                 "primary_tag": primary["name"] if primary else "",
                 "secondary_tags": [s["name"] for s in secondaries],
                 "similarity": match["similarity"],
@@ -264,7 +270,7 @@ def run_pipeline(name_or_url: str, extra_context: str | None = None, scraped=Non
     yield {"step": "assign_tags", "status": "running"}
     categories = db.get_all_categories(conn)
     category_names = [c["name"] for c in categories]
-    tagging_prompt = build_tagging_prompt(summary, category_names, few_shot_examples)
+    tagging_prompt = build_tagging_prompt(summary, keywords, category_names, few_shot_examples)
     tag_data = _call_json(client, TAGGING_SYSTEM_PROMPT, tagging_prompt)
     yield {"step": "assign_tags", "status": "done", "detail": f"proposed primary={tag_data['primary_tag']!r}"}
 
@@ -288,8 +294,8 @@ def run_pipeline(name_or_url: str, extra_context: str | None = None, scraped=Non
     }
 
     yield {"step": "save", "status": "running"}
-    company_id = db.insert_company(conn, brand_name, website, summary, primary_id, embedding_id="")
-    embedding_id = embed.embed_and_store(collection, embedder, company_id, summary)
+    company_id = db.insert_company(conn, brand_name, website, keywords, primary_id, embedding_id="")
+    embedding_id = embed.embed_and_store(collection, embedder, company_id, keywords)
     db.update_company_embedding_id(conn, company_id, embedding_id)
     if secondary_ids:
         db.add_secondary_tags(conn, company_id, secondary_ids)
@@ -299,7 +305,7 @@ def run_pipeline(name_or_url: str, extra_context: str | None = None, scraped=Non
         "company_id": company_id,
         "name": brand_name,
         "website": db.normalize_website(website) if website else "",
-        "summary": summary,
+        "keywords": keywords,
         "primary_tag": primary_name,
         "secondary_tags": secondary_names,
         "cache_hit": False,
