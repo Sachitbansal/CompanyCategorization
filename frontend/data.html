@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brand Categoriser — Data</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav>
+    <div class="brand"><span class="brand-dot"></span>Brand Categoriser</div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="data.html" class="active">Data</a>
+    </div>
+  </nav>
+
+  <main class="wide">
+    <h1>Categorized companies</h1>
+    <p class="subtitle">Everything in the database, with its assigned tags and keywords.</p>
+
+    <div class="data-controls">
+      <input type="text" id="search" placeholder="Filter by name or website" autocomplete="off" />
+    </div>
+
+    <div class="count" id="count"></div>
+    <div class="grid" id="grid"></div>
+    <div class="empty-state" id="empty-state" style="display: none;">
+      <strong>No companies yet</strong>
+      Go to the Home page and categorize a brand — it'll show up here.
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="data.js"></script>
+</body>
+</html>

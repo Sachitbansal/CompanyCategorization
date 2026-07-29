@@ -1,0 +1,82 @@
+---
+name: minimal-dashboard-ui
+description: Use whenever building or restyling the HTML/CSS/JS frontend for the optimiseGEO dashboard — the input form and the Data page showing categorized companies, their tags, and keywords. Guidance for a minimalist, intentional look rather than default browser/Bootstrap styling.
+---
+
+# Minimal dashboard UI — plain HTML/CSS/JS
+
+This is a data tool, not a marketing site. The job of the UI is to make
+the categorization data (company, website, primary tag, secondary tags,
+keywords) scannable at a glance and make submitting a new brand fast. Every
+choice below serves that, not decoration for its own sake.
+
+## Ground rules for "minimalistic but nice"
+- Minimal means restraint in what's on screen, not lack of care in how
+  it's done. Precision in spacing/type/alignment IS the design here —
+  there's no signature illustration or hero moment to hide behind.
+- One accent color, used sparingly (primary-tag chips, the submit button,
+  focus states) — everything else is neutral. Do not reach for gradients,
+  drop shadows on every card, or more than one accent hue.
+- No default browser form styling and no unstyled `<table>` — but also no
+  heavy component-library look (Bootstrap card shadows, rounded pill
+  buttons everywhere). Build it plain, in your own CSS.
+
+## Token system (pick once, use everywhere — don't restyle per-page)
+Define these as CSS custom properties in `:root` before writing any
+component so every page shares them:
+- **Color**: a near-white or near-black background (pick one, not both —
+  don't make the form page light and the Data page dark), one neutral
+  text color at ~85% contrast (not pure #000/#FFF, it's harsh), one muted
+  secondary-text color for metadata (website URLs, keyword chips), and
+  ONE accent color used only for primary-tag chips + primary actions.
+- **Type**: one system font stack is fine here (this is a utility tool,
+  not a brand moment) — but set a real type scale (e.g. 14px body, 13px
+  metadata, 20px page heading) rather than browser defaults everywhere.
+  Monospace for the website/URL field specifically reads as "data tool,"
+  and is a nice small intentional touch.
+- **Spacing**: pick one base unit (8px is a safe default) and derive every
+  margin/padding/gap as a multiple of it. Inconsistent spacing is the
+  single fastest way a plain HTML/CSS page reads as unstyled.
+- **Radius**: pick one border-radius value (0, or a small ~4-6px) and use
+  it everywhere — chips, inputs, buttons, cards. Mixing sharp and rounded
+  corners across the same page is a common tell of un-intentional design.
+
+## Layout for THIS content specifically
+- **Tag hierarchy in the UI should mirror the tag hierarchy in the data**:
+  primary tag gets the accent color and sits first/largest; secondary tags
+  are smaller, neutral-colored chips beside or below it. Don't render
+  primary and secondary as visually identical chips — that throws away
+  the one/many distinction your whole backend was built around.
+  Keywords are the noisiest field (up to ~12 items) — render them as
+  small, low-contrast chips or a single muted comma line, clearly
+  visually subordinate to the tags. They're supporting evidence, not the
+  headline.
+- **Company rows/cards**: name + website first (website in the muted
+  color, monospace), tags directly below in the hierarchy above, keywords
+  last and visually quietest. Don't give every field equal visual weight —
+  that's what makes a data table feel like a wall of text.
+- **Empty and loading states are part of the design, not an afterthought**:
+  a categorization call takes a few seconds (scrape + 2 LLM calls) — show
+  a real loading state on submit, not just a frozen button. An empty Data
+  page (no companies yet) should say plainly what to do next, not just
+  show blank space.
+- **Filter/search input** (you already have "filter by name or website")
+  should sit clearly above the list it filters, full-width or near it —
+  not a small corner input easy to miss.
+
+## What to avoid specifically for this project
+- Don't add animation beyond a simple fade-in or a subtle hover state on
+  rows — a categorization tool doesn't need scroll effects or motion.
+- Don't use more than one shade of "success/info" color for tag chips —
+  resist the urge to color-code every distinct primary tag category
+  differently; that turns into visual noise once you have 30+ categories,
+  and undermines the "one accent color" rule above.
+- Don't center-align body text or table cells — left-align everything
+  except numeric/short badge content.
+
+## Before calling it done
+Check the page at actual mobile width (not just resize the desktop
+browser slightly) — chips wrapping badly and cramped tables are the most
+common breakage on data-heavy pages. Also check visible keyboard focus on
+the form inputs and submit button — easy to lose by accident with custom
+CSS resets.

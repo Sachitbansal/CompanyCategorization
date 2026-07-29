@@ -1,5 +1,5 @@
 """
-dedup.py — string-level tag canonicalization guardrail for optimiseGEO.
+dedup.py — string-level tag canonicalization guardrail for Brand Categoriser.
 
 Runs in plain Python after every DeepSeek tag-assignment call, before any
 write to the categories table. This function is the SOLE source of truth

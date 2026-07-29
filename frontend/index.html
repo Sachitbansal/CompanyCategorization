@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brand Categoriser</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav>
+    <div class="brand"><span class="brand-dot"></span>Brand Categoriser</div>
+    <div class="nav-links">
+      <a href="index.html" class="active">Home</a>
+      <a href="data.html">Data</a>
+    </div>
+  </nav>
+
+  <main>
+    <h1>Categorize a brand</h1>
+    <p class="subtitle">Enter a brand name or a website — which one it is gets detected automatically.</p>
+
+    <div class="input-row">
+      <input type="text" id="input" placeholder="e.g. Stripe, or stripe.com" autocomplete="off" />
+      <button id="submit-btn">Categorize</button>
+    </div>
+
+    <div class="log-panel" id="log-panel"></div>
+
+    <div class="context-box" id="context-box">
+      <p>Couldn't confidently identify <strong id="context-brand"></strong> from the site/name alone.</p>
+      <p class="draft" id="context-draft"></p>
+      <textarea id="context-input" placeholder="Describe what this brand does (industry, product, customers)"></textarea>
+      <div class="context-actions">
+        <button id="context-submit">Submit description</button>
+        <button id="context-skip" class="secondary">Keep summary as-is</button>
+      </div>
+    </div>
+
+    <div class="card" id="result-card">
+      <div id="cache-note-wrap"></div>
+      <h2 id="result-name"></h2>
+      <div class="website" id="result-website"></div>
+
+      <div class="tag-section">
+        <div class="tag-label">Primary</div>
+        <div class="badge-row" id="result-primary"></div>
+      </div>
+
+      <div class="tag-section">
+        <div class="tag-label">Secondary</div>
+        <div class="badge-row" id="result-secondary"></div>
+      </div>
+
+      <div class="tag-section">
+        <div class="tag-label">Keywords</div>
+        <div class="keyword-line" id="result-keywords"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

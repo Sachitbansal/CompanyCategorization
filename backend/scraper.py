@@ -1,5 +1,5 @@
 """
-scraper.py — lightweight metadata scraper for optimiseGEO.
+scraper.py — lightweight metadata scraper for Brand Categoriser.
 
 Pulls only the handful of on-page signals that reliably describe "what a
 company does": <title>, meta description, og:description, JSON-LD
@@ -19,7 +19,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
-USER_AGENT = "Mozilla/5.0 (compatible; optimiseGEO/1.0; +https://optimiseGEO.example)"
+USER_AGENT = "Mozilla/5.0 (compatible; Brand Categoriser/1.0; +https://example.com)"
 DEFAULT_TIMEOUT = 3.0
 
 

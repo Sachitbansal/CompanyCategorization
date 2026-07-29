@@ -1,5 +1,5 @@
 """
-db.py — SQLite persistence layer for optimiseGEO.
+db.py — SQLite persistence layer for Brand Categoriser.
 
 Schema (see CLAUDE.md for the locked architecture):
     companies(id, name, website, keywords, primary_tag_id, embedding_id)
@@ -47,7 +47,7 @@ from typing import Optional
 # Connection / schema setup
 # ---------------------------------------------------------------------------
 
-def init_db(path: str = "optimisegeo.db") -> sqlite3.Connection:
+def init_db(path: str = "data/optimisegeo.db") -> sqlite3.Connection:
     """
     Open (or create) the SQLite database at `path`, create all tables and
     indexes if they don't already exist, and return the connection.

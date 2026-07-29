@@ -1,5 +1,5 @@
 """
-embed.py — company keyword embeddings for optimiseGEO.
+embed.py — company keyword embeddings for Brand Categoriser.
 
 Only the `keywords` list gets embedded (sentence-transformers
 all-MiniLM-L6-v2 -> Chroma), never the prose summary and never the tag
@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer
 
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 COLLECTION_NAME = "company_keywords"
-CHROMA_PATH = "chroma_db"
+CHROMA_PATH = "data/chroma_db"
 
 
 def get_embedder() -> SentenceTransformer:
@@ -91,7 +91,7 @@ def top_k_similar(
     embedder: SentenceTransformer,
     keywords: list[str],
     k: int = 5,
-    threshold: float = 0.55,
+    threshold: float = 0.60,
 ) -> list[dict]:
     """
     Retrieve up to k companies whose stored keyword lists are most similar
@@ -103,15 +103,20 @@ def top_k_similar(
     CLAUDE.md the caller should send the tag-assignment prompt with no
     few-shot examples rather than forcing in weak/irrelevant ones.
 
-    threshold=0.55, revised down from 0.65 (which was itself revised from
-    an initial 0.35 tuned for the old prose-summary embeddings). The
-    Stripe/Razorpay/Amazon/Flipkart/eBay set clustered same-industry pairs
-    at 0.70-0.86 and cross-industry at 0.53-0.60, which suggested 0.65 —
-    but HP vs Dell (both computer hardware, genuinely similar) scored only
-    0.584, below that cutoff. 0.55 lets HP/Dell through while still
-    sitting above most cross-industry pairs seen so far; keep re-measuring
-    as more companies are added, since each new pair shifts what "genuinely
-    similar" scores like for this embedding model.
+    threshold=0.60 — a compromise arrived at over several rounds of
+    measurement. History: 0.60 initial -> 0.35 (after fixing an
+    L2-vs-cosine units bug) -> 0.65 (after switching from prose-summary to
+    keyword embeddings, which shifted the whole range up) -> 0.55 (because
+    HP/Dell, genuinely similar, scored only 0.584) -> 0.60 now, because
+    0.55 was letting marginal cross-industry matches through and they
+    actively distorted results: Zomato (food delivery) retrieved Flipkart
+    at 0.569 and Alibaba at 0.604 as "similar", and those e-commerce
+    examples pulled its primary tag to "E-commerce" instead of a food
+    sector. 0.60 cuts the weakest of those while keeping same-industry
+    pairs. Note this sacrifices HP/Dell (0.584) — accepted, since a missing
+    few-shot example is far cheaper than a wrong one (with none, the model
+    reasons from the company's own keywords, which is the safer failure
+    mode). Keep re-measuring as the company set grows.
     """
     if collection.count() == 0:
         return []

@@ -5,4 +5,5 @@ chromadb
 rapidfuzz
 openai
 python-dotenv
-streamlit
+fastapi
+uvicorn[standard]

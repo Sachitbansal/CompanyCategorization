@@ -1,5 +1,5 @@
 """
-main.py — orchestration for the optimiseGEO brand categorization pipeline.
+main.py — orchestration for the Brand Categoriser pipeline.
 
 run_pipeline(name_or_url) is the core entry point: a generator that yields
 one event dict per pipeline stage so a caller (CLI, Streamlit, anything
