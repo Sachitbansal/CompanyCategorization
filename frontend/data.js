@@ -14,9 +14,20 @@ function badge(text, extraClass) {
 }
 
 async function fetchCompanies() {
-  const res = await fetch(`${API_BASE}/api/companies`);
-  allCompanies = await res.json();
-  render();
+  try {
+    const res = await fetch(`${API_BASE}/api/companies`);
+    if (!res.ok) throw new Error(`API returned ${res.status}`);
+    allCompanies = await res.json();
+    render();
+  } catch (err) {
+    allCompanies = [];
+    grid.innerHTML = "";
+    countEl.textContent = "";
+    emptyState.style.display = "block";
+    emptyState.innerHTML =
+      "<strong>Could not reach the backend</strong>" +
+      "The API request failed — check that the backend is reachable at /api from this page.";
+  }
 }
 
 async function deleteCompany(id) {
